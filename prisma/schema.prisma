@@ -6,3 +6,129 @@ datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
 }
+
+enum ListingStatus {
+  draft
+  published
+  archived
+}
+
+enum IssueReportStatus {
+  new
+  reviewed
+  resolved
+}
+
+enum AdminRole {
+  admin
+}
+
+model Category {
+  id            String        @id @default(cuid())
+  slug          String        @unique
+  title         String
+  description   String?
+  sortOrder     Int           @default(0)
+  isActive      Boolean       @default(true)
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+  subcategories Subcategory[]
+  listings      Listing[]
+
+  @@index([isActive, sortOrder])
+}
+
+model Subcategory {
+  id          String    @id @default(cuid())
+  categoryId  String
+  slug        String
+  title       String
+  description String?
+  sortOrder   Int       @default(0)
+  isActive    Boolean   @default(true)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  category    Category  @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  listings    Listing[]
+
+  @@unique([categoryId, slug])
+  @@index([categoryId, isActive, sortOrder])
+}
+
+model Listing {
+  id               String         @id @default(cuid())
+  slug             String         @unique
+  title            String
+  shortDescription String
+  description      String
+  categoryId       String
+  subcategoryId    String?
+  district         String?
+  address          String?
+  latitude         Decimal?       @db.Decimal(9, 6)
+  longitude        Decimal?       @db.Decimal(9, 6)
+  phone            String?
+  whatsappUrl      String?
+  telegramUrl      String?
+  websiteUrl       String?
+  instagramUrl     String?
+  priceLabel       String?
+  priceFrom        Int?
+  priceTo          Int?
+  workingHoursText String?
+  hasDelivery      Boolean        @default(false)
+  hasTakeaway      Boolean        @default(false)
+  isFeatured       Boolean        @default(false)
+  status           ListingStatus  @default(draft)
+  coverImageUrl    String?
+  lastVerifiedAt   DateTime?
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
+  category         Category       @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  subcategory      Subcategory?   @relation(fields: [subcategoryId], references: [id], onDelete: SetNull)
+  images           ListingImage[]
+  issueReports     IssueReport[]
+
+  @@index([categoryId, status])
+  @@index([subcategoryId, status])
+  @@index([district])
+  @@index([isFeatured, status])
+}
+
+model ListingImage {
+  id        String   @id @default(cuid())
+  listingId String
+  url       String
+  alt       String?
+  sortOrder Int      @default(0)
+  createdAt DateTime @default(now())
+  listing   Listing  @relation(fields: [listingId], references: [id], onDelete: Cascade)
+
+  @@index([listingId, sortOrder])
+}
+
+model AdminUser {
+  id           String    @id @default(cuid())
+  email        String    @unique
+  name         String?
+  passwordHash String
+  role         AdminRole @default(admin)
+  isActive     Boolean   @default(true)
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+}
+
+model IssueReport {
+  id        String            @id @default(cuid())
+  listingId String
+  type      String
+  message   String?
+  contact   String?
+  status    IssueReportStatus @default(new)
+  createdAt DateTime          @default(now())
+  updatedAt DateTime          @updatedAt
+  listing   Listing           @relation(fields: [listingId], references: [id], onDelete: Cascade)
+
+  @@index([listingId, createdAt])
+  @@index([status, createdAt])
+}
