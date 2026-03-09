@@ -4,8 +4,101 @@
 
 :root {
   color-scheme: light;
+  --font-sans: "Inter", "Segoe UI", "Roboto", sans-serif;
+  --font-display: "Georgia", "Times New Roman", serif;
+  --bg: #e6f0f7;
+  --ink: #12344c;
+  --muted: #5f7487;
+  --line: rgba(16, 58, 87, 0.16);
+  --glass: rgba(255, 255, 255, 0.8);
+  --accent: #1f7db2;
+  --accent-strong: #0c628f;
 }
 
 body {
-  @apply bg-white text-slate-900 antialiased;
+  @apply text-slate-900 antialiased;
+  min-height: 100vh;
+  font-family: var(--font-sans), "Segoe UI", sans-serif;
+  background:
+    radial-gradient(circle at 15% 10%, rgba(108, 169, 201, 0.28), transparent 40%),
+    radial-gradient(circle at 85% 5%, rgba(189, 220, 242, 0.5), transparent 35%),
+    linear-gradient(180deg, #e4eef5 0%, #eef4f9 48%, #f5f8fb 100%);
+  color: var(--ink);
+}
+
+a {
+  transition: color 0.2s ease;
+}
+
+.page-shell {
+  @apply mx-auto w-full max-w-6xl px-4 sm:px-6;
+}
+
+.glass-card {
+  background: var(--glass);
+  border: 1px solid var(--line);
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.55) inset,
+    0 16px 40px rgba(17, 65, 95, 0.12);
+  backdrop-filter: blur(8px);
+}
+
+.section-title {
+  @apply text-2xl tracking-tight md:text-3xl;
+  font-family: var(--font-display), Georgia, serif;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.section-subtitle {
+  @apply text-sm md:text-base;
+  color: var(--muted);
+}
+
+.display-title {
+  font-family: var(--font-display), Georgia, serif;
+  letter-spacing: 0.01em;
+}
+
+.elevate {
+  transition:
+    transform 0.28s ease,
+    box-shadow 0.28s ease;
+}
+
+.elevate:hover {
+  transform: translateY(-3px);
+}
+
+.enter-rise {
+  animation: enter-rise 0.8s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+
+.enter-rise-delay {
+  animation: enter-rise 1s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+
+@keyframes enter-rise {
+  from {
+    opacity: 0;
+    transform: translateY(24px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .elevate,
+  .enter-rise,
+  .enter-rise-delay {
+    animation: none;
+    transition: none;
+    transform: none;
+  }
+}
+
+input[type="checkbox"] {
+  accent-color: var(--accent);
 }

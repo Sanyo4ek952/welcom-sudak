@@ -5,7 +5,8 @@ import { revalidatePath } from "next/cache";
 
 import { AdminShell } from "@/app/admin/_components/admin-shell";
 import { getActiveCategoriesWithSubcategories } from "@/entities/category/api/get-categories";
-import { getAdminListingById, upsertAdminListing } from "@/entities/listing/api/admin-listings";
+import { parseAdminListingFormData } from "@/entities/listing/model/admin-listing-schema";
+import { AdminListingError, getAdminListingById, upsertAdminListing } from "@/entities/listing/api/admin-listings";
 import { requireAdminSession } from "@/shared/lib/admin-auth";
 import { Button } from "@/shared/ui/button";
 import { Input } from "@/shared/ui/input";
@@ -14,11 +15,18 @@ import { Textarea } from "@/shared/ui/textarea";
 
 type AdminListingEditPageProps = {
   params: Promise<{ id: string }>;
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
 };
 
-export default async function AdminListingEditPage({ params }: AdminListingEditPageProps) {
+function firstValue(value: string | string[] | undefined): string {
+  return Array.isArray(value) ? (value[0] ?? "") : (value ?? "");
+}
+
+export default async function AdminListingEditPage({ params, searchParams }: AdminListingEditPageProps) {
   await requireAdminSession();
   const { id } = await params;
+  const query = await searchParams;
+  const errorMessage = firstValue(query.error);
 
   const [listing, categories] = await Promise.all([getAdminListingById(id), getActiveCategoriesWithSubcategories()]);
   if (!listing) {
@@ -31,30 +39,26 @@ export default async function AdminListingEditPage({ params }: AdminListingEditP
 
     await requireAdminSession();
 
-    await upsertAdminListing({
-      id,
-      title: String(formData.get("title") ?? ""),
-      slug: String(formData.get("slug") ?? ""),
-      shortDescription: String(formData.get("shortDescription") ?? ""),
-      description: String(formData.get("description") ?? ""),
-      categoryId: String(formData.get("categoryId") ?? ""),
-      subcategoryId: String(formData.get("subcategoryId") ?? "") || null,
-      district: String(formData.get("district") ?? "") || null,
-      address: String(formData.get("address") ?? "") || null,
-      phone: String(formData.get("phone") ?? "") || null,
-      workingHoursText: String(formData.get("workingHoursText") ?? "") || null,
-      priceLabel: String(formData.get("priceLabel") ?? "") || null,
-      priceFrom: Number(formData.get("priceFrom") || 0) || null,
-      priceTo: Number(formData.get("priceTo") || 0) || null,
-      hasDelivery: Boolean(formData.get("hasDelivery")),
-      hasTakeaway: Boolean(formData.get("hasTakeaway")),
-      isFeatured: Boolean(formData.get("isFeatured")),
-      status: (String(formData.get("status") ?? currentListing.status) as ListingStatus) || currentListing.status,
-    });
+    const parsed = parseAdminListingFormData(formData, currentListing.status);
+    if (!parsed.success) {
+      const message = parsed.error.issues[0]?.message ?? "Проверьте форму перед сохранением.";
+      redirect(`/admin/listings/${id}?error=${encodeURIComponent(message)}`);
+    }
+
+    try {
+      await upsertAdminListing({
+        ...parsed.data,
+        id,
+      });
+    } catch (error) {
+      const message = error instanceof AdminListingError ? error.message : "Не удалось сохранить карточку.";
+      redirect(`/admin/listings/${id}?error=${encodeURIComponent(message)}`);
+    }
 
     revalidatePath("/admin/listings");
     revalidatePath(`/admin/listings/${id}`);
     revalidatePath("/listings");
+    revalidatePath(`/listing/${parsed.data.slug}`);
     redirect("/admin/listings");
   }
 
@@ -67,13 +71,18 @@ export default async function AdminListingEditPage({ params }: AdminListingEditP
 
   return (
     <AdminShell title="Редактирование карточки">
+      {errorMessage ? (
+        <p className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">{errorMessage}</p>
+      ) : null}
+
       <div>
-        <Link href="/admin/listings" className="text-sm text-sky-700 hover:text-sky-800">
+        <Link href="/admin/listings" className="text-sm text-[var(--accent-strong)] hover:text-sky-800">
           ← Назад к списку
         </Link>
       </div>
 
-      <form action={updateListingAction} className="grid gap-3 rounded-xl border border-slate-200 bg-white p-4 shadow-sm md:grid-cols-2">
+      <form action={updateListingAction} className="glass-card grid gap-3 rounded-3xl p-5 md:grid-cols-2">
+        <input type="hidden" name="id" value={id} />
         <Input name="title" required defaultValue={currentListing.title} />
         <Input name="slug" required defaultValue={currentListing.slug} />
         <Input name="shortDescription" required defaultValue={currentListing.shortDescription} />
@@ -84,6 +93,13 @@ export default async function AdminListingEditPage({ params }: AdminListingEditP
         <Input name="priceLabel" defaultValue={currentListing.priceLabel ?? ""} />
         <Input name="priceFrom" type="number" defaultValue={currentListing.priceFrom ?? ""} />
         <Input name="priceTo" type="number" defaultValue={currentListing.priceTo ?? ""} />
+        <Input name="latitude" type="number" step="0.000001" defaultValue={currentListing.latitude?.toString() ?? ""} />
+        <Input name="longitude" type="number" step="0.000001" defaultValue={currentListing.longitude?.toString() ?? ""} />
+        <Input name="websiteUrl" type="url" defaultValue={currentListing.websiteUrl ?? ""} />
+        <Input name="instagramUrl" type="url" defaultValue={currentListing.instagramUrl ?? ""} />
+        <Input name="telegramUrl" type="url" defaultValue={currentListing.telegramUrl ?? ""} />
+        <Input name="whatsappUrl" type="url" defaultValue={currentListing.whatsappUrl ?? ""} />
+        <Input name="coverImageUrl" type="url" defaultValue={currentListing.coverImageUrl ?? ""} />
         <Select
           name="categoryId"
           defaultValue={currentListing.categoryId}
@@ -119,6 +135,14 @@ export default async function AdminListingEditPage({ params }: AdminListingEditP
           <input type="checkbox" name="isFeatured" value="1" defaultChecked={currentListing.isFeatured} className="h-4 w-4 rounded border-slate-300" />
           Рекомендуемое место
         </label>
+        <div className="md:col-span-2">
+          <Textarea
+            name="imageRows"
+            rows={5}
+            defaultValue={currentListing.images.map((image) => `${image.url}${image.alt ? ` | ${image.alt}` : ""}`).join("\n")}
+            placeholder="Изображения (по строке): https://... | alt-текст (опционально)"
+          />
+        </div>
         <div className="md:col-span-2">
           <Textarea name="description" rows={6} required defaultValue={currentListing.description} />
         </div>

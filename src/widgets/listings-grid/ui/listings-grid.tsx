@@ -8,7 +8,7 @@ type ListingsGridProps = {
 export function ListingsGrid({ listings }: ListingsGridProps) {
   if (listings.length === 0) {
     return (
-      <div className="rounded-xl border border-dashed border-slate-300 bg-white p-10 text-center text-sm text-slate-500">
+      <div className="glass-card rounded-3xl border-dashed p-10 text-center text-sm text-slate-500">
         Ничего не найдено. Попробуйте убрать часть фильтров или изменить поисковый запрос.
       </div>
     );

@@ -33,17 +33,17 @@ export default async function AdminIssuesPage() {
 
   return (
     <AdminShell title="Issue reports">
-      <section className="space-y-3 rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+      <section className="glass-card space-y-3 rounded-3xl p-5">
         {issues.length === 0 ? <p className="text-sm text-slate-600">Обращений пока нет.</p> : null}
 
         {issues.map((issue) => (
-          <article key={issue.id} className="space-y-2 rounded-lg border border-slate-200 p-3">
+          <article key={issue.id} className="space-y-2 rounded-2xl border border-[var(--line)] bg-white/55 p-4">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <div>
                 <p className="font-medium text-slate-900">{issue.type}</p>
                 <p className="text-sm text-slate-600">
                   По карточке{" "}
-                  <Link href={`/listing/${issue.listing.slug}`} className="text-sky-700 hover:text-sky-800">
+                  <Link href={`/listing/${issue.listing.slug}`} className="text-[var(--accent-strong)] hover:text-sky-800">
                     {issue.listing.title}
                   </Link>
                 </p>

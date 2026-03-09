@@ -1,10 +1,12 @@
 import { ListingStatus } from "@prisma/client";
 import Link from "next/link";
 import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
 
 import { AdminShell } from "@/app/admin/_components/admin-shell";
 import { getActiveCategoriesWithSubcategories } from "@/entities/category/api/get-categories";
-import { getAdminListings, setAdminListingStatus, upsertAdminListing } from "@/entities/listing/api/admin-listings";
+import { parseAdminListingFormData } from "@/entities/listing/model/admin-listing-schema";
+import { AdminListingError, deleteAdminListing, getAdminListings, setAdminListingStatus, upsertAdminListing } from "@/entities/listing/api/admin-listings";
 import { requireAdminSession } from "@/shared/lib/admin-auth";
 import { Button } from "@/shared/ui/button";
 import { Input } from "@/shared/ui/input";
@@ -15,8 +17,19 @@ export const metadata = {
   title: "Admin listings",
 };
 
-export default async function AdminListingsPage() {
+type AdminListingsPageProps = {
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+};
+
+function firstValue(value: string | string[] | undefined): string {
+  return Array.isArray(value) ? (value[0] ?? "") : (value ?? "");
+}
+
+export default async function AdminListingsPage({ searchParams }: AdminListingsPageProps) {
   await requireAdminSession();
+  const params = await searchParams;
+  const errorMessage = firstValue(params.error);
+  const successMessage = firstValue(params.success);
 
   const [listings, categories] = await Promise.all([getAdminListings(), getActiveCategoriesWithSubcategories()]);
 
@@ -25,33 +38,22 @@ export default async function AdminListingsPage() {
 
     await requireAdminSession();
 
-    const categoryId = String(formData.get("categoryId") ?? "");
-    if (!categoryId) {
-      return;
+    const parsed = parseAdminListingFormData(formData, ListingStatus.draft);
+    if (!parsed.success) {
+      const message = parsed.error.issues[0]?.message ?? "Проверьте заполнение формы.";
+      redirect(`/admin/listings?error=${encodeURIComponent(message)}`);
     }
 
-    await upsertAdminListing({
-      title: String(formData.get("title") ?? ""),
-      slug: String(formData.get("slug") ?? ""),
-      shortDescription: String(formData.get("shortDescription") ?? ""),
-      description: String(formData.get("description") ?? ""),
-      categoryId,
-      subcategoryId: String(formData.get("subcategoryId") ?? "") || null,
-      district: String(formData.get("district") ?? "") || null,
-      address: String(formData.get("address") ?? "") || null,
-      phone: String(formData.get("phone") ?? "") || null,
-      workingHoursText: String(formData.get("workingHoursText") ?? "") || null,
-      priceLabel: String(formData.get("priceLabel") ?? "") || null,
-      priceFrom: Number(formData.get("priceFrom") || 0) || null,
-      priceTo: Number(formData.get("priceTo") || 0) || null,
-      hasDelivery: Boolean(formData.get("hasDelivery")),
-      hasTakeaway: Boolean(formData.get("hasTakeaway")),
-      isFeatured: Boolean(formData.get("isFeatured")),
-      status: (String(formData.get("status") ?? "draft") as ListingStatus) || ListingStatus.draft,
-    });
+    try {
+      await upsertAdminListing(parsed.data);
+    } catch (error) {
+      const message = error instanceof AdminListingError ? error.message : "Не удалось создать карточку.";
+      redirect(`/admin/listings?error=${encodeURIComponent(message)}`);
+    }
 
     revalidatePath("/admin/listings");
     revalidatePath("/listings");
+    redirect("/admin/listings?success=Карточка создана");
   }
 
   async function updateStatusAction(formData: FormData) {
@@ -65,9 +67,63 @@ export default async function AdminListingsPage() {
       return;
     }
 
-    await setAdminListingStatus(id, status);
+    try {
+      await setAdminListingStatus(id, status);
+    } catch (error) {
+      const message = error instanceof AdminListingError ? error.message : "Не удалось обновить статус.";
+      redirect(`/admin/listings?error=${encodeURIComponent(message)}`);
+    }
     revalidatePath("/admin/listings");
     revalidatePath("/listings");
+    redirect("/admin/listings?success=Статус обновлен");
+  }
+
+  async function archiveListingAction(formData: FormData) {
+    "use server";
+
+    await requireAdminSession();
+    const id = String(formData.get("id") ?? "");
+    if (!id) {
+      return;
+    }
+
+    try {
+      await setAdminListingStatus(id, ListingStatus.archived);
+    } catch (error) {
+      const message = error instanceof AdminListingError ? error.message : "Не удалось архивировать карточку.";
+      redirect(`/admin/listings?error=${encodeURIComponent(message)}`);
+    }
+    revalidatePath("/admin/listings");
+    revalidatePath("/listings");
+    redirect("/admin/listings?success=Карточка архивирована");
+  }
+
+  async function deleteListingAction(formData: FormData) {
+    "use server";
+
+    await requireAdminSession();
+    const id = String(formData.get("id") ?? "");
+    const slug = String(formData.get("slug") ?? "");
+    const confirmSlug = String(formData.get("confirmSlug") ?? "").trim();
+    if (!id) {
+      return;
+    }
+    if (!slug || confirmSlug !== slug) {
+      redirect("/admin/listings?error=Для удаления введите точный slug карточки.");
+    }
+
+    try {
+      await deleteAdminListing(id);
+    } catch (error) {
+      const message = error instanceof AdminListingError ? error.message : "Не удалось удалить карточку.";
+      redirect(`/admin/listings?error=${encodeURIComponent(message)}`);
+    }
+    revalidatePath("/admin/listings");
+    revalidatePath("/listings");
+    if (slug) {
+      revalidatePath(`/listing/${slug}`);
+    }
+    redirect("/admin/listings?success=Карточка удалена");
   }
 
   const subcategoryOptions = categories.flatMap((category) =>
@@ -79,7 +135,14 @@ export default async function AdminListingsPage() {
 
   return (
     <AdminShell title="Карточки мест">
-      <section className="space-y-3 rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+      {errorMessage ? (
+        <p className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">{errorMessage}</p>
+      ) : null}
+      {successMessage ? (
+        <p className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">{successMessage}</p>
+      ) : null}
+
+      <section className="glass-card space-y-3 rounded-3xl p-5">
         <h2 className="text-xl font-semibold text-slate-900">Создать карточку</h2>
         <form action={createListingAction} className="grid gap-3 md:grid-cols-2">
           <Input name="title" required placeholder="Название" />
@@ -92,6 +155,13 @@ export default async function AdminListingsPage() {
           <Input name="priceLabel" placeholder="Ценовая метка (напр. Средний чек)" />
           <Input name="priceFrom" type="number" placeholder="Цена от" />
           <Input name="priceTo" type="number" placeholder="Цена до" />
+          <Input name="latitude" type="number" step="0.000001" placeholder="Широта" />
+          <Input name="longitude" type="number" step="0.000001" placeholder="Долгота" />
+          <Input name="websiteUrl" type="url" placeholder="Сайт (URL)" />
+          <Input name="instagramUrl" type="url" placeholder="Instagram URL" />
+          <Input name="telegramUrl" type="url" placeholder="Telegram URL" />
+          <Input name="whatsappUrl" type="url" placeholder="WhatsApp URL" />
+          <Input name="coverImageUrl" type="url" placeholder="Cover image URL" />
           <Select
             name="categoryId"
             options={categories.map((category) => ({
@@ -121,6 +191,9 @@ export default async function AdminListingsPage() {
             Рекомендуемое место
           </label>
           <div className="md:col-span-2">
+            <Textarea name="imageRows" rows={4} placeholder="Изображения (по строке): https://... | alt-текст (опционально)" />
+          </div>
+          <div className="md:col-span-2">
             <Textarea name="description" rows={5} required placeholder="Полное описание" />
           </div>
           <div className="md:col-span-2">
@@ -129,11 +202,11 @@ export default async function AdminListingsPage() {
         </form>
       </section>
 
-      <section className="space-y-3 rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+      <section className="glass-card space-y-3 rounded-3xl p-5">
         <h2 className="text-xl font-semibold text-slate-900">Список карточек</h2>
         <div className="space-y-2">
           {listings.map((listing) => (
-            <article key={listing.id} className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-slate-200 p-3">
+            <article key={listing.id} className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-[var(--line)] bg-white/55 p-4">
               <div>
                 <p className="font-medium text-slate-900">{listing.title}</p>
                 <p className="text-sm text-slate-600">
@@ -158,9 +231,28 @@ export default async function AdminListingsPage() {
                   </Button>
                 </form>
 
-                <Link className="rounded-lg px-3 py-2 text-sm text-sky-700 hover:bg-sky-50" href={`/admin/listings/${listing.id}`}>
+                <Link className="rounded-full px-3 py-2 text-sm text-[var(--accent-strong)] hover:bg-white/70" href={`/admin/listings/${listing.id}`}>
                   Редактировать
                 </Link>
+                <form action={archiveListingAction}>
+                  <input type="hidden" name="id" value={listing.id} />
+                  <Button type="submit" variant="secondary">
+                    Архивировать
+                  </Button>
+                </form>
+                <form action={deleteListingAction}>
+                  <input type="hidden" name="id" value={listing.id} />
+                  <input type="hidden" name="slug" value={listing.slug} />
+                  <Input
+                    name="confirmSlug"
+                    placeholder="slug для удаления"
+                    className="w-40"
+                    aria-label={`Подтверждение удаления ${listing.slug}`}
+                  />
+                  <Button type="submit" variant="ghost">
+                    Удалить
+                  </Button>
+                </form>
               </div>
             </article>
           ))}

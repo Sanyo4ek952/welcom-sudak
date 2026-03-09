@@ -1,4 +1,5 @@
 import { ListingStatus, type Prisma } from "@prisma/client";
+import { PrismaClientKnownRequestError } from "@prisma/client/runtime/library";
 
 import { prisma } from "@/shared/lib/prisma";
 
@@ -56,11 +57,30 @@ export type UpsertListingInput = {
   priceLabel?: string | null;
   priceFrom?: number | null;
   priceTo?: number | null;
+  latitude?: number | null;
+  longitude?: number | null;
   hasDelivery?: boolean;
   hasTakeaway?: boolean;
   isFeatured?: boolean;
   status?: ListingStatus;
+  websiteUrl?: string | null;
+  instagramUrl?: string | null;
+  telegramUrl?: string | null;
+  whatsappUrl?: string | null;
+  coverImageUrl?: string | null;
+  images?: Array<{
+    url: string;
+    alt?: string | null;
+    sortOrder: number;
+  }>;
 };
+
+export class AdminListingError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "AdminListingError";
+  }
+}
 
 export async function upsertAdminListing(input: UpsertListingInput): Promise<void> {
   const payload: Prisma.ListingUncheckedCreateInput = {
@@ -77,6 +97,13 @@ export async function upsertAdminListing(input: UpsertListingInput): Promise<voi
     priceLabel: input.priceLabel ?? null,
     priceFrom: input.priceFrom ?? null,
     priceTo: input.priceTo ?? null,
+    latitude: input.latitude ?? null,
+    longitude: input.longitude ?? null,
+    websiteUrl: input.websiteUrl ?? null,
+    instagramUrl: input.instagramUrl ?? null,
+    telegramUrl: input.telegramUrl ?? null,
+    whatsappUrl: input.whatsappUrl ?? null,
+    coverImageUrl: input.coverImageUrl ?? null,
     hasDelivery: input.hasDelivery ?? false,
     hasTakeaway: input.hasTakeaway ?? false,
     isFeatured: input.isFeatured ?? false,
@@ -84,21 +111,68 @@ export async function upsertAdminListing(input: UpsertListingInput): Promise<voi
   };
 
   if (input.id) {
-    await prisma.listing.update({
-      where: { id: input.id },
-      data: payload,
-    });
-    return;
+    try {
+      await prisma.listing.update({
+        where: { id: input.id },
+        data: {
+          ...payload,
+          images: input.images
+            ? {
+                deleteMany: {},
+                create: input.images.map((image) => ({
+                  url: image.url,
+                  alt: image.alt ?? null,
+                  sortOrder: image.sortOrder,
+                })),
+              }
+            : undefined,
+        },
+      });
+      return;
+    } catch (error) {
+      throw toAdminListingError(error);
+    }
   }
 
-  await prisma.listing.create({ data: payload });
+  try {
+    await prisma.listing.create({
+      data: {
+        ...payload,
+        images: input.images
+          ? {
+              create: input.images.map((image) => ({
+                url: image.url,
+                alt: image.alt ?? null,
+                sortOrder: image.sortOrder,
+              })),
+            }
+          : undefined,
+      },
+    });
+  } catch (error) {
+    throw toAdminListingError(error);
+  }
 }
 
 export async function setAdminListingStatus(id: string, status: ListingStatus): Promise<void> {
-  await prisma.listing.update({
-    where: { id },
-    data: { status },
-  });
+  try {
+    await prisma.listing.update({
+      where: { id },
+      data: { status },
+    });
+  } catch (error) {
+    throw toAdminListingError(error);
+  }
+}
+
+export async function deleteAdminListing(id: string): Promise<void> {
+  try {
+    await prisma.listing.delete({
+      where: { id },
+    });
+  } catch (error) {
+    throw toAdminListingError(error);
+  }
 }
 
 export async function getAdminListingById(id: string) {
@@ -119,10 +193,46 @@ export async function getAdminListingById(id: string) {
       priceLabel: true,
       priceFrom: true,
       priceTo: true,
+      latitude: true,
+      longitude: true,
+      websiteUrl: true,
+      instagramUrl: true,
+      telegramUrl: true,
+      whatsappUrl: true,
+      coverImageUrl: true,
       hasDelivery: true,
       hasTakeaway: true,
       isFeatured: true,
       status: true,
+      images: {
+        select: {
+          id: true,
+          url: true,
+          alt: true,
+          sortOrder: true,
+        },
+        orderBy: {
+          sortOrder: "asc",
+        },
+      },
     },
   });
+}
+
+function toAdminListingError(error: unknown): AdminListingError {
+  if (error instanceof PrismaClientKnownRequestError) {
+    if (error.code === "P2002") {
+      const targets = Array.isArray(error.meta?.target) ? error.meta.target.join(", ") : String(error.meta?.target ?? "");
+      if (targets.includes("slug")) {
+        return new AdminListingError("Карточка с таким slug уже существует.");
+      }
+      return new AdminListingError("Нарушение уникальности данных. Проверьте форму и попробуйте снова.");
+    }
+
+    if (error.code === "P2025") {
+      return new AdminListingError("Карточка не найдена или уже была удалена.");
+    }
+  }
+
+  return new AdminListingError("Не удалось сохранить карточку. Попробуйте снова.");
 }

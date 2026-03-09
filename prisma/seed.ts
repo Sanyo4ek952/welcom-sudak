@@ -1,6 +1,8 @@
 import { AdminRole, ListingStatus, PrismaClient } from "@prisma/client";
 
 const prisma = new PrismaClient();
+const ADMIN_DEV_PASSWORD_HASH =
+  "scrypt$welcom-sudak-dev-salt$fc876d6bef7b9854027aaaf86d6ce8c6071d34417956906bf57ff452e90b7593fd7c52b00bad068418722dc5102ac3f222713e323bc665aa2bf5d952bcbd7644";
 
 const categories = [
   { slug: "attractions", title: "Достопримечательности", sortOrder: 1 },
@@ -248,14 +250,14 @@ async function main() {
     where: { email: "admin@welcom-sudak.local" },
     update: {
       name: "Welcome Sudak Admin",
-      passwordHash: "$2b$12$demo.hash.for.local.dev.only",
+      passwordHash: ADMIN_DEV_PASSWORD_HASH,
       role: AdminRole.admin,
       isActive: true,
     },
     create: {
       email: "admin@welcom-sudak.local",
       name: "Welcome Sudak Admin",
-      passwordHash: "$2b$12$demo.hash.for.local.dev.only",
+      passwordHash: ADMIN_DEV_PASSWORD_HASH,
       role: AdminRole.admin,
       isActive: true,
     },

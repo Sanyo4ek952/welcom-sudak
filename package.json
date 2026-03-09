@@ -7,9 +7,16 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
+    "typecheck": "tsc --noEmit",
+    "clean": "node -e \"const fs=require('node:fs'); for (const dir of ['.next','.next-build','.next-cache']) { try { fs.rmSync(dir,{recursive:true,force:true,maxRetries:3,retryDelay:120}); } catch {} }\"",
+    "check:release": "npm run clean && npm run lint && npm run build",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
-    "prisma:seed": "prisma db seed"
+    "prisma:seed": "prisma db seed",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:ci": "vitest run --coverage",
+    "test:e2e": "playwright test"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"
@@ -27,12 +34,18 @@
     "@types/react": "19.0.10",
     "@types/react-dom": "19.0.4",
     "autoprefixer": "10.4.20",
+    "@playwright/test": "^1.53.2",
+    "@testing-library/jest-dom": "^6.9.1",
+    "@testing-library/react": "^16.3.0",
     "eslint": "8.57.1",
     "eslint-config-next": "15.2.0",
+    "jsdom": "^26.1.0",
     "postcss": "8.4.49",
     "prisma": "6.5.0",
     "tailwindcss": "3.4.17",
     "tsx": "^4.21.0",
-    "typescript": "5.8.2"
+    "typescript": "5.8.2",
+    "vitest": "^3.2.4",
+    "@vitest/coverage-v8": "^3.2.4"
   }
 }

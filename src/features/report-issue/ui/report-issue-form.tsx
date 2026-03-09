@@ -25,6 +25,7 @@ export function ReportIssueForm({ listingId }: ReportIssueFormProps) {
         type: String(formData.get("type") ?? ""),
         message: String(formData.get("message") ?? ""),
         contact: String(formData.get("contact") ?? ""),
+        captchaToken: String(formData.get("captchaToken") ?? ""),
       };
 
       const response = await fetch("/api/report-issue", {
@@ -50,7 +51,7 @@ export function ReportIssueForm({ listingId }: ReportIssueFormProps) {
   return (
     <form
       action={handleSubmit}
-      className="space-y-3 rounded-xl border border-slate-200 bg-white p-4 shadow-sm"
+      className="glass-card space-y-3 rounded-3xl p-5"
     >
       <h3 className="text-lg font-semibold text-slate-900">Сообщить об ошибке</h3>
       <p className="text-sm text-slate-600">Нашли неточность в карточке? Отправьте обращение, и мы проверим информацию.</p>
@@ -69,6 +70,7 @@ export function ReportIssueForm({ listingId }: ReportIssueFormProps) {
 
       <Textarea name="message" rows={4} placeholder="Подробности (необязательно)" />
       <Input name="contact" placeholder="Контакт для связи (email/телефон, необязательно)" />
+      <input type="hidden" name="captchaToken" value="" />
 
       <div className="flex items-center gap-3">
         <Button type="submit" disabled={state === "loading"}>

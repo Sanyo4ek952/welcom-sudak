@@ -28,13 +28,13 @@ export default async function ListingsPage({ searchParams }: ListingsPageProps) 
   ]);
 
   return (
-    <main className="mx-auto min-h-screen w-full max-w-6xl space-y-6 px-6 py-10">
-      <div className="space-y-2">
-        <Link href="/" className="text-sm text-sky-700 hover:text-sky-800">
+    <main className="page-shell min-h-screen space-y-6 py-8">
+      <div className="glass-card enter-rise space-y-2 rounded-3xl p-6">
+        <Link href="/" className="text-sm text-[var(--accent-strong)] hover:text-sky-800">
           ← На главную
         </Link>
-        <h1 className="text-3xl font-semibold tracking-tight text-slate-900">Каталог мест</h1>
-        <p className="text-sm text-slate-600">Поиск, фильтры и shareable URL для подбора мест в Судаке.</p>
+        <h1 className="section-title">Каталог мест</h1>
+        <p className="section-subtitle">Поиск, фильтры и shareable URL для подбора мест в Судаке.</p>
       </div>
 
       <FilterListingsForm filters={filters} categories={categories} districts={districts} />
